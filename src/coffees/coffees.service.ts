@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Coffee } from './entities/coffee.entity';
 import { Repository } from 'typeorm';
 import { Flavour } from './entities/flavour.entity';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 @Injectable()
 export class CoffeesService {
@@ -28,9 +29,12 @@ export class CoffeesService {
     return this.coffeeRepository.save(coffee);
   }
 
-  async findAll(): Promise<Coffee[]> {
+  async findAll(paginationQueryDto: PaginationQueryDto): Promise<Coffee[]> {
+    const { limit, offset } = paginationQueryDto;
     return this.coffeeRepository.find({
       relations: ['flavours'],
+      take: limit ?? 10,
+      skip: offset ?? 0,
     });
   }
 
