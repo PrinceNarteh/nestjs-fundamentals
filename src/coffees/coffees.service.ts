@@ -4,25 +4,41 @@ import { UpdateCoffeeDto } from './dto/update-coffee.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Coffee } from './entities/coffee.entity';
 import { Repository } from 'typeorm';
+import { Flavour } from './entities/flavour.entity';
 
 @Injectable()
 export class CoffeesService {
   constructor(
     @InjectRepository(Coffee)
     private readonly coffeeRepository: Repository<Coffee>,
+    @InjectRepository(Flavour)
+    private readonly flavourRepository: Repository<Flavour>,
   ) {}
 
-  create(createCoffeeDto: CreateCoffeeDto) {
-    const coffee = this.coffeeRepository.create(createCoffeeDto);
+  async create(createCoffeeDto: CreateCoffeeDto) {
+    const flavours = await Promise.all(
+      createCoffeeDto.flavours.map((flavour) =>
+        this.preloadFlavourByName(flavour),
+      ),
+    );
+    const coffee = this.coffeeRepository.create({
+      ...createCoffeeDto,
+      flavours,
+    });
     return this.coffeeRepository.save(coffee);
   }
 
   async findAll(): Promise<Coffee[]> {
-    return this.coffeeRepository.find();
+    return this.coffeeRepository.find({
+      relations: ['flavours'],
+    });
   }
 
   async findOne(id: number): Promise<Coffee> {
-    const coffee = await this.coffeeRepository.findOne({ where: { id } });
+    const coffee = await this.coffeeRepository.findOne({
+      where: { id },
+      relations: ['flavours'],
+    });
     if (!coffee) {
       throw new NotFoundException(`Coffee #${id} not found`);
     }
@@ -30,9 +46,17 @@ export class CoffeesService {
   }
 
   async update(id: number, updateCoffeeDto: UpdateCoffeeDto) {
+    const flavours =
+      updateCoffeeDto.flavours &&
+      (await Promise.all(
+        updateCoffeeDto.flavours.map((flavour) =>
+          this.preloadFlavourByName(flavour),
+        ),
+      ));
     const coffee = await this.coffeeRepository.preload({
       id,
       ...updateCoffeeDto,
+      flavours,
     });
     if (!coffee) {
       throw new NotFoundException(`Coffee #${id} not found`);
@@ -43,5 +67,13 @@ export class CoffeesService {
   async remove(id: number) {
     const coffee = await this.findOne(id);
     return this.coffeeRepository.remove(coffee);
+  }
+
+  private async preloadFlavourByName(name: string): Promise<Flavour> {
+    const flavourExists = await this.flavourRepository.findOne({
+      where: { name },
+    });
+    if (flavourExists) return flavourExists;
+    return this.flavourRepository.create({ name });
   }
 }
